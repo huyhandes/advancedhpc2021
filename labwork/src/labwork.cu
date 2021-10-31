@@ -147,6 +147,7 @@ void Labwork::labwork2_GPU() {
         // get informations from individual device
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, i);
+        printf("Device name: %s, device core clock %d, id: %d\n",prop.name,prop.clockRate,i);
         // something more here
     }
 
