@@ -192,7 +192,35 @@ void Labwork::labwork3_GPU() {
     cudaFree(devGray);
 }
 
+__global__ void rgb2grayCUDABlock(uchar3 *input, uchar3 *output) {
+        int tid_x = threadIdx.x + blockIdx.x * blockDim.x;
+        int tid_y = threadIdx.y + blockIdx.y * blockDim.y;
+        int tid = tid_x + blockDim.x * gridDim.x * tid_y;
+        output[tid].x = (input[tid].x + input[tid].y + input[tid].z) / 3;
+        output[tid].z = output[tid].y = output[tid].x;
+    }
+
 void Labwork::labwork4_GPU() {
+    int pixelCount = inputImage->width * inputImage->height * 3;  // let's do it 100 times, otherwise it's too fast!
+    uchar3 *devInput;
+    uchar3 *devGray;
+    outputImage = static_cast<char *>(malloc(pixelCount));
+    // Allocate CUDA memory
+    // Copy CUDA Memory from CPU to GPU
+    cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+    cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
+    cudaMemcpy(devInput, inputImage->buffer, pixelCount, cudaMemcpyHostToDevice);
+
+    // Processing
+    dim3 blockSize = dim3(32,32);
+    dim3 gridSize = dim3(122,81);
+    rgb2grayCUDABlock<<<gridSize, blockSize>>>(devInput, devGray);
+    
+    // Copy CUDA Memory from GPU to CPU
+    cudaMemcpy(outputImage, devGray, pixelCount, cudaMemcpyDeviceToHost);
+    // Cleaning
+    cudaFree(devInput);
+    cudaFree(devGray);
 }
 
 void Labwork::labwork5_CPU() {
