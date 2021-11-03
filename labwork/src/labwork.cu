@@ -108,6 +108,7 @@ void Labwork::labwork1_CPU() {
 
 void Labwork::labwork1_OpenMP() {
     int pixelCount = inputImage->width * inputImage->height;
+    outputImage = static_cast<char *>(malloc(pixelCount * 3));
     omp_set_num_threads(15);
     #pragma omp parallel for
     for (int j = 0; j < 100; j++) {     // let's do it 100 times, otherwise it's too fast!
@@ -118,8 +119,6 @@ void Labwork::labwork1_OpenMP() {
             outputImage[i * 3 + 2] = outputImage[i * 3];
         }
     }
-    outputImage = static_cast<char *>(malloc(pixelCount * 3));
-    // do something here
 }
 
 int getSPcores(cudaDeviceProp devProp) {
@@ -163,18 +162,34 @@ void Labwork::labwork2_GPU() {
 
 }
 
+__global__ void rgb2grayCUDA(uchar3 *input, uchar3 *output) {
+        int tid = threadIdx.x + blockIdx.x * blockDim.x;
+        output[tid].x = (input[tid].x + input[tid].y + input[tid].z) / 3;
+        output[tid].z = output[tid].y = output[tid].x;
+    }
+
 void Labwork::labwork3_GPU() {
     // Calculate number of pixels
-
-    // Allocate CUDA memory    
-
+    int pixelCount = inputImage->width * inputImage->height * 3;  // let's do it 100 times, otherwise it's too fast!
+    uchar3 *devInput;
+    uchar3 *devGray;
+    outputImage = static_cast<char *>(malloc(pixelCount));
+    // Allocate CUDA memory
     // Copy CUDA Memory from CPU to GPU
+    cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+    cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
+    cudaMemcpy(devInput, inputImage->buffer, pixelCount, cudaMemcpyHostToDevice);
 
     // Processing
-
+    int blockSize = 512;
+    int numBlock = pixelCount / (blockSize*3);
+    rgb2grayCUDA<<<numBlock, blockSize>>>(devInput, devGray);
+    
     // Copy CUDA Memory from GPU to CPU
-
+    cudaMemcpy(outputImage, devGray, pixelCount, cudaMemcpyDeviceToHost);
     // Cleaning
+    cudaFree(devInput);
+    cudaFree(devGray);
 }
 
 void Labwork::labwork4_GPU() {
