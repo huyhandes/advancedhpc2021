@@ -214,7 +214,7 @@ void Labwork::labwork4_GPU() {
 
     // Processing
     dim3 blockSize = dim3(32,32);
-    dim3 gridSize = dim3(ceil(1.0*inputImage->width/32),ceil(inputImage->height)/32);
+    dim3 gridSize = dim3(ceil(1.0*inputImage->width/32),ceil(1.0*inputImage->height)/32);
     rgb2grayCUDABlock<<<gridSize, blockSize>>>(devInput, devGray);
     
     // Copy CUDA Memory from GPU to CPU
