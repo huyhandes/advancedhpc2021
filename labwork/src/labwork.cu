@@ -2,6 +2,7 @@
 #include <include/labwork.h>
 #include <cuda_runtime_api.h>
 #include <omp.h>
+#include <math.h>
 
 #define ACTIVE_THREADS 4
 
@@ -201,7 +202,7 @@ __global__ void rgb2grayCUDABlock(uchar3 *input, uchar3 *output) {
     }
 
 void Labwork::labwork4_GPU() {
-    int pixelCount = inputImage->width * inputImage->height * 3;  // let's do it 100 times, otherwise it's too fast!
+    int pixelCount = inputImage->width * inputImage->height * 3; 
     uchar3 *devInput;
     uchar3 *devGray;
     outputImage = static_cast<char *>(malloc(pixelCount));
@@ -213,7 +214,7 @@ void Labwork::labwork4_GPU() {
 
     // Processing
     dim3 blockSize = dim3(32,32);
-    dim3 gridSize = dim3(122,81);
+    dim3 gridSize = dim3(ceil(1.0*inputImage->width/32),ceil(inputImage->height)/32);
     rgb2grayCUDABlock<<<gridSize, blockSize>>>(devInput, devGray);
     
     // Copy CUDA Memory from GPU to CPU
