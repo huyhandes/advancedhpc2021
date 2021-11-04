@@ -55,6 +55,8 @@ int main(int argc, char **argv) {
         case 5:
             labwork.labwork5_CPU();
             labwork.saveOutputImage("labwork5-cpu-out.jpg");
+            printf("labwork 5 CPU ellapsed %.1fms\n", lwNum, timer.getElapsedTimeInMilliSec());
+            timer.start();
             labwork.labwork5_GPU();
             labwork.saveOutputImage("labwork5-gpu-out.jpg");
             break;
@@ -225,9 +227,66 @@ void Labwork::labwork4_GPU() {
 }
 
 void Labwork::labwork5_CPU() {
+    outputImage = static_cast<char *>(malloc(inputImage->width * inputImage->height*3));
+    int gaussian[7][7] = {{0,0,1,2,1,0,0},{0,3,13,22,13,3,0},{1,13,59,97,59,13,1},{2,22,97,159,97,22,2},{1,13,59,97,59,13,1},{0,3,13,22,13,3,0},{0,0,1,2,1,0,0}};
+    int total = 1003;
+    for (int row = 3; row < inputImage->height-3; row++) {
+        for (int col = 3; col < inputImage->width-3; col++) {
+            int sumR = 0,sumG = 0,sumB = 0;
+            for(int i = -3; i<=3 ; ++i)
+                for(int j = -3; j<=3 ; ++j){
+                    int pos = (row + i) * inputImage->width + (col + j);
+                    sumR += inputImage->buffer[pos*3] * gaussian[i+3][j+3];
+                    sumG += inputImage->buffer[pos*3 + 1] * gaussian[i+3][j+3];
+                    sumB += inputImage->buffer[pos*3 + 2] * gaussian[i+3][j+3];
+                }
+            int current_pos = row * inputImage->width + col;
+            outputImage[current_pos * 3] = sumR/total;
+            outputImage[current_pos * 3 + 1] = sumG/total;
+            outputImage[current_pos * 3 + 2] = sumB/total;
+        }
+    }
 }
 
+__global__ void GaussianCUDABlock(uchar3 *input, uchar3 *output) {
+        int tid_x = threadIdx.x + blockIdx.x * blockDim.x;
+        int tid_y = threadIdx.y + blockIdx.y * blockDim.y;
+        int tid = tid_x + blockDim.x * gridDim.x * tid_y;
+        int gaussian[7][7] = {{0,0,1,2,1,0,0},{0,3,13,22,13,3,0},{1,13,59,97,59,13,1},{2,22,97,159,97,22,2},{1,13,59,97,59,13,1},{0,3,13,22,13,3,0},{0,0,1,2,1,0,0}};
+        int total = 1003;
+        int sumR = 0,sumG =0, sumB = 0;
+        for(int i = -3; i<=3 ; ++i)
+            for(int j = -3; j<=3 ; ++j){
+                int cell_tid = tid + i * blockDim.x * gridDim.x + j ;
+                sumR += input[cell_tid].x * gaussian[i+3][j+3];
+                sumG += input[cell_tid].y * gaussian[i+3][j+3];
+                sumB += input[cell_tid].z * gaussian[i+3][j+3];
+            }
+        output[tid].x = sumR/total;
+        output[tid].y = sumG/total;
+        output[tid].z = sumB/total;
+}
 void Labwork::labwork5_GPU() {
+    int pixelCount = inputImage->width * inputImage->height * 3; 
+    uchar3 *devInput;
+    uchar3 *devGray;
+    outputImage = static_cast<char *>(malloc(pixelCount));
+    // Allocate CUDA memory
+    // Copy CUDA Memory from CPU to GPU
+    cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+    cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
+    cudaMemcpy(devInput, inputImage->buffer, pixelCount, cudaMemcpyHostToDevice);
+
+    // Processing
+    dim3 blockSize = dim3(32,32);
+    dim3 gridSize = dim3(ceil(1.0*inputImage->width/32),ceil(1.0*inputImage->height)/32);
+    GaussianCUDABlock<<<gridSize, blockSize>>>(devInput, devGray);
+    
+    // Copy CUDA Memory from GPU to CPU
+    cudaMemcpy(outputImage, devGray, pixelCount, cudaMemcpyDeviceToHost);
+    // Cleaning
+    cudaFree(devInput);
+    cudaFree(devGray);
 }
 
 void Labwork::labwork6_GPU() {
