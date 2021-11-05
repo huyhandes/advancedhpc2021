@@ -249,22 +249,26 @@ void Labwork::labwork5_CPU() {
 }
 
 __global__ void GaussianCUDABlock(uchar3 *input, uchar3 *output) {
-        int tid_x = threadIdx.x + blockIdx.x * blockDim.x;
-        int tid_y = threadIdx.y + blockIdx.y * blockDim.y;
-        int tid = tid_x + blockDim.x * gridDim.x * tid_y;
-        int gaussian[7][7] = {{0,0,1,2,1,0,0},{0,3,13,22,13,3,0},{1,13,59,97,59,13,1},{2,22,97,159,97,22,2},{1,13,59,97,59,13,1},{0,3,13,22,13,3,0},{0,0,1,2,1,0,0}};
-        int total = 1003;
-        int sumR = 0,sumG =0, sumB = 0;
-        for(int i = -3; i<=3 ; ++i)
-            for(int j = -3; j<=3 ; ++j){
-                int cell_tid = tid + i * blockDim.x * gridDim.x + j ;
-                sumR += input[cell_tid].x * gaussian[i+3][j+3];
-                sumG += input[cell_tid].y * gaussian[i+3][j+3];
-                sumB += input[cell_tid].z * gaussian[i+3][j+3];
-            }
-        output[tid].x = sumR/total;
-        output[tid].y = sumG/total;
-        output[tid].z = sumB/total;
+    int gaussian[7][7] = {{0,0,1,2,1,0,0},{0,3,13,22,13,3,0},{1,13,59,97,59,13,1},{2,22,97,159,97,22,2},{1,13,59,97,59,13,1},{0,3,13,22,13,3,0},{0,0,1,2,1,0,0}};
+    int tid_x = threadIdx.x + blockIdx.x * blockDim.x;
+    int tid_y = threadIdx.y + blockIdx.y * blockDim.y;
+    int tid = tid_x + blockDim.x * gridDim.x * tid_y;
+    __shared__ int shared_gaussian[7][7];
+    if (tid_x < 7 && tid_y < 7)
+        shared_gaussian[tid_x][tid_y] = gaussian[tid_x][tid_y];
+    __syncthreads();
+    int total = 1003;
+    int sumR = 0,sumG =0, sumB = 0;
+    for(int i = -3; i<=3 ; ++i)
+        for(int j = -3; j<=3 ; ++j){
+            int cell_tid = tid + i * blockDim.x * gridDim.x + j ;
+            sumR += input[cell_tid].x * shared_gaussian[i+3][j+3];
+            sumG += input[cell_tid].y * shared_gaussian[i+3][j+3];
+            sumB += input[cell_tid].z * shared_gaussian[i+3][j+3];
+        }
+    output[tid].x = sumR/total;
+    output[tid].y = sumG/total;
+    output[tid].z = sumB/total;
 }
 void Labwork::labwork5_GPU() {
     int pixelCount = inputImage->width * inputImage->height * 3; 
@@ -288,8 +292,37 @@ void Labwork::labwork5_GPU() {
     cudaFree(devInput);
     cudaFree(devGray);
 }
-
+__device__ int binary(int a){
+    return a<155 ? 0:255;
+}
+__global__ void graybinaryCUDABlock(uchar3 *input, uchar3 *output) {
+    int tid_x = threadIdx.x + blockIdx.x * blockDim.x;
+    int tid_y = threadIdx.y + blockIdx.y * blockDim.y;
+    int tid = tid_x + blockDim.x * gridDim.x * tid_y;
+    output[tid].x = binary(input[tid].x);
+    output[tid].z = output[tid].y = output[tid].x;
+}
 void Labwork::labwork6_GPU() {
+    int pixelCount = inputImage->width * inputImage->height * 3; 
+    uchar3 *devInput;
+    uchar3 *devGray;
+    outputImage = static_cast<char *>(malloc(pixelCount));
+    // Allocate CUDA memory
+    // Copy CUDA Memory from CPU to GPU
+    cudaMalloc(&devInput, pixelCount * sizeof(uchar3));
+    cudaMalloc(&devGray, pixelCount * sizeof(uchar3));
+    cudaMemcpy(devInput, inputImage->buffer, pixelCount, cudaMemcpyHostToDevice);
+
+    // Processing
+    dim3 blockSize = dim3(32,32);
+    dim3 gridSize = dim3(ceil(1.0*inputImage->width/32),ceil(1.0*inputImage->height)/32);
+    graybinaryCUDABlock<<<gridSize, blockSize>>>(devInput, devGray);
+    
+    // Copy CUDA Memory from GPU to CPU
+    cudaMemcpy(outputImage, devGray, pixelCount, cudaMemcpyDeviceToHost);
+    // Cleaning
+    cudaFree(devInput);
+    cudaFree(devGray);
 }
 
 void Labwork::labwork7_GPU() {
