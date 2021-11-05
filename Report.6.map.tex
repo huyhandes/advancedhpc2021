@@ -1,0 +1,40 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{listings}
+
+\title{Labwork 6}
+\author{BUI Quang Huy}
+\date{October 2021}
+
+\begin{document}
+
+\maketitle
+
+Running labwork :
+\begin{itemize}
+    \item Copy labwork 4 to labwork 6
+    \item Change the kernel to 
+    \begin{lstlisting}
+        __device__ int binary(int a){
+    return a<155 ? 0:255;
+}
+__global__ void graybinaryCUDABlock(uchar3 *input, uchar3 *output) {
+    int tid_x = threadIdx.x + blockIdx.x * blockDim.x;
+    int tid_y = threadIdx.y + blockIdx.y * blockDim.y;
+    int tid = tid_x + blockDim.x * gridDim.x * tid_y;
+    output[tid].x = binary(input[tid].x);
+    output[tid].z = output[tid].y = output[tid].x;
+}
+}
+    \end{lstlisting}
+    \item Compile make -j
+    \item Run command ./labwork 6 labwork3-gpu-out.jpg
+    \item Result:\begin{lstlisting}
+        ./labwork 6 labwork3-gpu-out.jpg           
+        USTH ICT Master 2018, Advanced Programming for HPC.
+        Warming up...
+        Starting labwork 6
+        labwork 6 ellapsed 2.9ms
+    \end{lstlisting}
+\end{itemize}
+\end{document}
